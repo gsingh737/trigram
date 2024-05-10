@@ -1,4 +1,3 @@
-
 package main
 
 import (
@@ -14,12 +13,10 @@ import (
 // Top N trigrams to display
 const NTopTrigram = 100 // 100 trigrams default
 
-
 func main() {
 	// Parse command-line flags
 	flag.Parse()
 	paths := flag.Args()
-
 
 	var wg sync.WaitGroup
 	results := make(chan []trigrams.Trigram)
