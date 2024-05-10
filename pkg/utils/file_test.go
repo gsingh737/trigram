@@ -1,72 +1,151 @@
 package utils
 
 import (
-	"io/ioutil"
+	"errors"
 	"os"
+	"strings"
 	"testing"
 )
 
-// Mock data for testing
-var mockFileData = "This is a line.\nAnd another one."
-
-func TestStreamFile(t *testing.T) {
-	// Create a temporary file with mock data
-	tmpFile, err := ioutil.TempFile("", "mockfile")
-	if err != nil {
-		t.Fatalf("Unable to create temporary file: %v", err)
-	}
-	defer os.Remove(tmpFile.Name())
-
-	if _, err := tmpFile.Write([]byte(mockFileData)); err != nil {
-		t.Fatalf("Failed to write to temporary file: %v", err)
-	}
-	if err := tmpFile.Close(); err != nil {
-		t.Fatalf("Failed to close temporary file: %v", err)
-	}
-
-	// Count function that increments the line count
-	lineCount := 0
-	testCountFunc := func(line string) { lineCount++ }
-
-	// Test StreamFile with the temporary file
-	err = StreamFile(tmpFile.Name(), testCountFunc)
-	if err != nil {
-		t.Errorf("Unexpected error from StreamFile: %v", err)
-	}
-	if lineCount != 2 {
-		t.Errorf("Expected 2 line counts, got %d", lineCount)
+func TestStreamReader(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected []string
+	}{
+		{
+			name:     "Multiple lines",
+			input:    "line1\nline2\nline3\n",
+			expected: []string{"line1", "line2", "line3"},
+		},
+		{
+			name:     "Single line",
+			input:    "single line",
+			expected: []string{"single line"},
+		},
+		{
+			name:     "Empty input",
+			input:    "",
+			expected: []string{},
+		},
+		{
+			name:     "Multiple lines with empty lines",
+			input:    "multiple\n\nlines\nwith\nempty\nlines\n",
+			expected: []string{"multiple", "", "lines", "with", "empty", "lines"},
+		},
 	}
 
-	// Test error case: nonexistent file
-	err = StreamFile("nonexistent_file.txt", testCountFunc)
-	if err == nil {
-		t.Error("Expected error from StreamFile due to nonexistent file, but got none")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var lines []string
+			count := func(line string) {
+				lines = append(lines, line)
+			}
+
+			reader := strings.NewReader(tt.input)
+			err := StreamReader(reader, count)
+			if err != nil {
+				t.Fatalf("StreamReader returned an error: %v", err)
+			}
+
+			if !equalStringSlices(lines, tt.expected) {
+				t.Errorf("StreamReader(%q) = %v; want %v", tt.input, lines, tt.expected)
+			}
+		})
 	}
 }
 
+func TestStreamFile(t *testing.T) {
+	// Test with a valid file
+	t.Run("Valid file", func(t *testing.T) {
+		tempFile, err := os.CreateTemp("", "streamfile_test")
+		if err != nil {
+			t.Fatalf("Failed to create temporary file: %v", err)
+		}
+		defer os.Remove(tempFile.Name())
+
+		content := "line1\nline2\nline3\n"
+		if _, err := tempFile.WriteString(content); err != nil {
+			t.Fatalf("Failed to write to temporary file: %v", err)
+		}
+
+		var lines []string
+		count := func(line string) {
+			lines = append(lines, line)
+		}
+
+		if err := StreamFile(tempFile.Name(), count); err != nil {
+			t.Fatalf("StreamFile returned an error: %v", err)
+		}
+
+		expected := []string{"line1", "line2", "line3"}
+		if !equalStringSlices(lines, expected) {
+			t.Errorf("StreamFile(%q) = %v; want %v", tempFile.Name(), lines, expected)
+		}
+	})
+
+	// Test with a non-existent file
+	t.Run("Non-existent file", func(t *testing.T) {
+		invalidFile := "invalid_file.txt"
+
+		var lines []string
+		count := func(line string) {
+			lines = append(lines, line)
+		}
+
+		err := StreamFile(invalidFile, count)
+		if !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("StreamFile with non-existent file returned: %v; want error of type %T", err, os.ErrNotExist)
+		}
+
+		if len(lines) != 0 {
+			t.Errorf("StreamFile(%q) = %v; want %v", invalidFile, lines, []string{})
+		}
+	})
+}
+
 func TestStreamStdin(t *testing.T) {
-	// Count function that increments the line count
-	lineCount := 0
-	testCountFunc := func(line string) { lineCount++ }
+	// Mock stdin with sample input
+	input := "input1\ninput2\ninput3\n"
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("Failed to create a pipe: %v", err)
+	}
+	defer func() { _ = reader.Close() }()
+	defer func() { _ = writer.Close() }()
 
-	// Replace os.Stdin with a mock input
 	oldStdin := os.Stdin
-	defer func() { os.Stdin = oldStdin }() // Restore os.Stdin
-	r, w, _ := os.Pipe()
-	os.Stdin = r
+	defer func() { os.Stdin = oldStdin }()
+	os.Stdin = reader
 
-	// Write mock data to the pipe
 	go func() {
-		defer w.Close()
-		w.Write([]byte(mockFileData))
+		_, _ = writer.Write([]byte(input))
+		_ = writer.Close()
 	}()
 
-	// Test StreamStdin with the mock input
-	err := StreamStdin(testCountFunc)
-	if err != nil {
-		t.Errorf("Unexpected error from StreamStdin: %v", err)
+	var lines []string
+	count := func(line string) {
+		lines = append(lines, line)
 	}
-	if lineCount != 2 {
-		t.Errorf("Expected 2 line counts, got %d", lineCount)
+
+	if err := StreamStdin(count); err != nil {
+		t.Fatalf("StreamStdin returned an error: %v", err)
 	}
+
+	expected := []string{"input1", "input2", "input3"}
+	if !equalStringSlices(lines, expected) {
+		t.Errorf("StreamStdin() = %v; want %v", lines, expected)
+	}
+}
+
+func equalStringSlices(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
