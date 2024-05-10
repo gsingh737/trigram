@@ -6,19 +6,35 @@
 **Prerequisite:** Go 1.22.2
 
 ### Command Line
+**Build and Run the Program**
 ```bash
-# Running with files
-go run ./cmd/main.go -- ./texts/moby_dick.txt ./texts/brothers_karamazov.txt
+# Build the Go binary
+make build
 
-# Running with stdin
-cat ./texts/*.txt | go run ./cmd/main.go
-```
+# Run the program with files
+make run-files ARGS="-- ./texts/moby_dick.txt ./texts/brothers_karamazov.txt"
 
-### Running Tests
-```bash
+# Run the program with stdin
+make run-stdin
+
 # Run all tests
-go test ./...
-```
+make test
+
+# Clean up the Go binary
+make clean
+
+# Build the Docker image
+make docker
+
+# Run with files using Docker
+make docker-run
+
+# Run with stdin using Docker
+make docker-stdin
+
+# Build and Run Tests in Docker
+make docker-test
+
 
 ## Project Structure
 
