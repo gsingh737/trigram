@@ -1,0 +1,26 @@
+# Binaries
+trigrams
+*.exe
+
+# Output and test result files
+*.out
+*.test
+*.html
+
+# Temporary files and directories
+*.tmp
+*.temp
+*~
+
+# Go specific files
+vendor/
+*.log
+.DS_Store
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+
+# Mac OS
+.DS_Store

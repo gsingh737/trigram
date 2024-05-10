@@ -1,0 +1,8 @@
+# Exclude the build files and other unnecessary files
+Dockerfile
+.dockerignore
+*.out
+*.zip
+*.html
+*.test
+texts/
